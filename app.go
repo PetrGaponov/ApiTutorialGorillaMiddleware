@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strconv"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 	//log "github.com/sirupsen/logrus"
@@ -24,6 +25,40 @@ type App struct {
 	Router *mux.Router
 	DB     *sql.DB
 	Logger *logrus.Logger
+}
+
+//
+func Message(status bool, message string) map[string]interface{} {
+	return map[string]interface{}{"status": status, "message": message}
+}
+
+func Respond(w http.ResponseWriter, data map[string]interface{}) {
+	w.Header().Add("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+//
+func AuthRest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("Authorization")
+		//
+		splitted := strings.Split(token, " ") //The token normally comes in format `Bearer {token-body}`, we check if the retrieved token matched this requirement
+		if len(splitted) != 2 {
+			response := Message(false, "Invalid/Malformed auth token")
+			w.WriteHeader(http.StatusForbidden)
+			//w.Header().Add("Content-Type", "application/json")
+			Respond(w, response)
+			return
+		}
+		tokenPart := splitted[1] //Grab the token part, what we are truly interested in
+
+		//
+		if tokenPart != "TOKEN" {
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 //
